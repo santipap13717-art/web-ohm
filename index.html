@@ -194,11 +194,60 @@
             box-shadow: 0 2px 10px rgba(245, 87, 108, 0.4);
         }
 
+        .price-btn {
+            background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%);
+            padding: 8px 15px;
+            font-size: 0.9em;
+            box-shadow: 0 2px 10px rgba(255, 167, 38, 0.4);
+            margin: 0 3px;
+        }
+
+        .add-stock-btn {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            padding: 8px 15px;
+            font-size: 0.9em;
+            box-shadow: 0 2px 10px rgba(67, 233, 123, 0.4);
+            margin: 0 3px;
+        }
+
+        .edit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 8px 15px;
+            font-size: 0.9em;
+            box-shadow: 0 2px 10px rgba(102, 126, 234, 0.4);
+            margin: 0 3px;
+        }
+
+        .edit-stock-btn {
+            background: linear-gradient(135deg, #00b4db 0%, #0083b0 100%);
+            padding: 8px 15px;
+            font-size: 0.9em;
+            box-shadow: 0 2px 10px rgba(0, 180, 219, 0.4);
+            margin: 0 3px;
+        }
+
         .date-filter {
             display: flex;
             gap: 10px;
             align-items: flex-end;
             flex-wrap: wrap;
+        }
+
+        .price-change {
+            font-size: 0.85em;
+            padding: 3px 8px;
+            border-radius: 5px;
+            margin-left: 5px;
+        }
+
+        .price-increase {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .price-decrease {
+            background: #ffebee;
+            color: #c62828;
         }
 
         @media (max-width: 768px) {
@@ -216,6 +265,12 @@
 
             th, td {
                 padding: 10px;
+            }
+
+            button {
+                padding: 10px 15px;
+                font-size: 0.85em;
+                margin: 2px 0;
             }
         }
     </style>
@@ -244,6 +299,28 @@
                 </div>
             </div>
 
+            <!-- Add New Product -->
+            <div class="section">
+                <h2>➕ เพิ่มสินค้าใหม่</h2>
+                <form id="addProductForm">
+                    <div class="form-group">
+                        <div class="form-control">
+                            <label for="newProductName">ชื่อสินค้า</label>
+                            <input type="text" id="newProductName" placeholder="ระบุชื่อสินค้า" required>
+                        </div>
+                        <div class="form-control">
+                            <label for="newProductPrice">ราคา (฿)</label>
+                            <input type="number" id="newProductPrice" min="0" step="0.01" placeholder="0.00" required>
+                        </div>
+                        <div class="form-control">
+                            <label for="newProductStock">จำนวนสต็อก</label>
+                            <input type="number" id="newProductStock" min="0" placeholder="0" required>
+                        </div>
+                    </div>
+                    <button type="submit">✅ เพิ่มสินค้า</button>
+                </form>
+            </div>
+
             <!-- Product Stock Management -->
             <div class="section">
                 <h2>📊 สต็อกสินค้าทั้งหมด</h2>
@@ -254,6 +331,7 @@
                             <th>ราคา (฿)</th>
                             <th>จำนวนคงเหลือ</th>
                             <th>การจัดการ</th>
+                            <th>ลบ</th>
                         </tr>
                     </thead>
                     <tbody id="stockTableBody">
@@ -318,11 +396,11 @@
     <script>
         // Initialize products with default data
         let products = [
-            { id: 1, name: "สินค้า A", price: 100, stock: 50 },
-            { id: 2, name: "สินค้า B", price: 150, stock: 30 },
-            { id: 3, name: "สินค้า C", price: 200, stock: 40 },
-            { id: 4, name: "สินค้า D", price: 120, stock: 25 },
-            { id: 5, name: "สินค้า E", price: 180, stock: 35 }
+            { id: 1, name: "สินค้า A", price: 100, stock: 50, priceHistory: [{price: 100, date: new Date().toISOString()}] },
+            { id: 2, name: "สินค้า B", price: 150, stock: 30, priceHistory: [{price: 150, date: new Date().toISOString()}] },
+            { id: 3, name: "สินค้า C", price: 200, stock: 40, priceHistory: [{price: 200, date: new Date().toISOString()}] },
+            { id: 4, name: "สินค้า D", price: 120, stock: 25, priceHistory: [{price: 120, date: new Date().toISOString()}] },
+            { id: 5, name: "สินค้า E", price: 180, stock: 35, priceHistory: [{price: 180, date: new Date().toISOString()}] }
         ];
 
         let sales = [];
@@ -334,6 +412,12 @@
             
             if (savedProducts) {
                 products = JSON.parse(savedProducts);
+                // Ensure priceHistory exists for older data
+                products.forEach(p => {
+                    if (!p.priceHistory) {
+                        p.priceHistory = [{price: p.price, date: new Date().toISOString()}];
+                    }
+                });
             }
             if (savedSales) {
                 sales = JSON.parse(savedSales);
@@ -356,15 +440,36 @@
             
             products.forEach(product => {
                 const row = tbody.insertRow();
+                
+                // Check if price changed recently
+                let priceChangeHtml = '';
+                if (product.priceHistory && product.priceHistory.length > 1) {
+                    const previousPrice = product.priceHistory[product.priceHistory.length - 2].price;
+                    const currentPrice = product.price;
+                    const change = currentPrice - previousPrice;
+                    const changePercent = ((change / previousPrice) * 100).toFixed(1);
+                    
+                    if (change !== 0) {
+                        const changeClass = change > 0 ? 'price-increase' : 'price-decrease';
+                        const changeSymbol = change > 0 ? '▲' : '▼';
+                        priceChangeHtml = `<span class="price-change ${changeClass}">${changeSymbol} ${Math.abs(changePercent)}%</span>`;
+                    }
+                }
+                
                 row.innerHTML = `
                     <td>${product.name}</td>
-                    <td>฿${product.price.toLocaleString()}</td>
+                    <td>฿${product.price.toLocaleString()}${priceChangeHtml}</td>
                     <td class="${product.stock < 20 ? 'stock-low' : 'stock-ok'}">
                         ${product.stock} ${product.stock < 20 ? '⚠️ สต็อกต่ำ' : '✅'}
                     </td>
                     <td>
-                        <button onclick="addStock(${product.id})">➕ เพิ่มสต็อก</button>
-                        <button onclick="editProduct(${product.id})">✏️ แก้ไข</button>
+                        <button class="add-stock-btn" onclick="addStock(${product.id})">➕ เพิ่มสต็อก</button>
+                        <button class="edit-stock-btn" onclick="editStock(${product.id})">📝 แก้ไขสต็อก</button>
+                        <button class="price-btn" onclick="adjustPrice(${product.id})">💰 ปรับราคา</button>
+                        <button class="edit-btn" onclick="editProduct(${product.id})">✏️ แก้ไขชื่อ</button>
+                    </td>
+                    <td>
+                        <button class="delete-btn" onclick="deleteProduct(${product.id})">🗑️ ลบสินค้า</button>
                     </td>
                 `;
             });
@@ -403,20 +508,178 @@
             }
         }
 
+        // Edit stock directly
+        function editStock(productId) {
+            const product = products.find(p => p.id === productId);
+            const currentStock = product.stock;
+            
+            const newStock = prompt(
+                `แก้ไขสต็อกสินค้า: ${product.name}\n\nสต็อกปัจจุบัน: ${currentStock} หน่วย\nระบุจำนวนสต็อกใหม่:`, 
+                currentStock
+            );
+            
+            if (newStock === null) return; // User cancelled
+            
+            if (newStock === '' || isNaN(newStock) || parseInt(newStock) < 0) {
+                alert('❌ กรุณาระบุจำนวนที่ถูกต้อง (ต้องเป็นตัวเลข 0 หรือมากกว่า)');
+                return;
+            }
+            
+            const stock = parseInt(newStock);
+            const oldStock = product.stock;
+            
+            if (stock === oldStock) {
+                alert('ℹ️ สต็อกไม่เปลี่ยนแปลง');
+                return;
+            }
+            
+            // Update stock
+            product.stock = stock;
+            saveData();
+            renderStockTable();
+            
+            const change = stock - oldStock;
+            const changeText = change > 0 
+                ? `เพิ่มขึ้น ${change} หน่วย` 
+                : `ลดลง ${Math.abs(change)} หน่วย`;
+            
+            alert(`✅ แก้ไขสต็อก ${product.name} สำเร็จ!\n\nสต็อกเก่า: ${oldStock} หน่วย\nสต็อกใหม่: ${stock} หน่วย\n${changeText}`);
+        }
+
+        // Adjust product price
+        function adjustPrice(productId) {
+            const product = products.find(p => p.id === productId);
+            const currentPrice = product.price;
+            
+            const newPrice = prompt(
+                `ปรับราคาสินค้า: ${product.name}\n\nราคาปัจจุบัน: ฿${currentPrice}\nระบุราคาใหม่:`, 
+                currentPrice
+            );
+            
+            if (newPrice && !isNaN(newPrice) && parseFloat(newPrice) > 0) {
+                const oldPrice = product.price;
+                const price = parseFloat(newPrice);
+                
+                if (price === oldPrice) {
+                    alert('ℹ️ ราคาไม่เปลี่ยนแปลง');
+                    return;
+                }
+                
+                // Update price and add to history
+                product.price = price;
+                if (!product.priceHistory) {
+                    product.priceHistory = [];
+                }
+                product.priceHistory.push({
+                    price: price,
+                    date: new Date().toISOString()
+                });
+                
+                saveData();
+                renderStockTable();
+                renderSalesTable();
+                
+                const change = price - oldPrice;
+                const changePercent = ((change / oldPrice) * 100).toFixed(1);
+                const changeText = change > 0 ? `เพิ่มขึ้น ${changePercent}%` : `ลดลง ${Math.abs(changePercent)}%`;
+                
+                alert(`✅ ปรับราคา ${product.name} สำเร็จ!\n\nราคาเก่า: ฿${oldPrice}\nราคาใหม่: ฿${price}\n${changeText}`);
+            }
+        }
+
         // Edit product
         function editProduct(productId) {
             const product = products.find(p => p.id === productId);
             const newName = prompt('ชื่อสินค้า:', product.name);
-            if (newName) product.name = newName;
-            
-            const newPrice = prompt('ราคา (฿):', product.price);
-            if (newPrice && !isNaN(newPrice) && parseFloat(newPrice) > 0) {
-                product.price = parseFloat(newPrice);
+            if (newName && newName.trim() !== '') {
+                product.name = newName.trim();
             }
             
             saveData();
             renderStockTable();
             renderSalesTable();
+        }
+
+        // Add new product
+        document.getElementById('addProductForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('newProductName').value.trim();
+            const price = parseFloat(document.getElementById('newProductPrice').value);
+            const stock = parseInt(document.getElementById('newProductStock').value);
+            
+            if (!name) {
+                alert('❌ กรุณาระบุชื่อสินค้า');
+                return;
+            }
+            
+            if (price < 0) {
+                alert('❌ ราคาต้องเป็นจำนวนบวก');
+                return;
+            }
+            
+            if (stock < 0) {
+                alert('❌ จำนวนสต็อกต้องเป็นจำนวนบวกหรือ 0');
+                return;
+            }
+            
+            // Check for duplicate name
+            const existingProduct = products.find(p => p.name.toLowerCase() === name.toLowerCase());
+            if (existingProduct) {
+                if (!confirm(`⚠️ มีสินค้าชื่อ "${name}" อยู่แล้ว\nต้องการเพิ่มสินค้าซ้ำชื่อหรือไม่?`)) {
+                    return;
+                }
+            }
+            
+            // Create new product
+            const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+            const newProduct = {
+                id: newId,
+                name: name,
+                price: price,
+                stock: stock,
+                priceHistory: [{price: price, date: new Date().toISOString()}]
+            };
+            
+            products.push(newProduct);
+            saveData();
+            renderStockTable();
+            
+            // Reset form
+            this.reset();
+            
+            alert(`✅ เพิ่มสินค้าใหม่สำเร็จ!\n\nชื่อ: ${name}\nราคา: ฿${price.toLocaleString()}\nสต็อก: ${stock} หน่วย`);
+        });
+
+        // Delete product
+        function deleteProduct(productId) {
+            const product = products.find(p => p.id === productId);
+            
+            // Check if product has sales history
+            const productSales = sales.filter(s => s.productId === productId);
+            
+            if (productSales.length > 0) {
+                const confirmMsg = `⚠️ สินค้า "${product.name}" มีประวัติการขาย ${productSales.length} รายการ\n\nถ้าลบสินค้านี้ ประวัติการขายทั้งหมดจะถูกลบด้วย\n\nคุณแน่ใจหรือไม่?`;
+                if (!confirm(confirmMsg)) {
+                    return;
+                }
+                
+                // Remove all sales of this product
+                sales = sales.filter(s => s.productId !== productId);
+            } else {
+                if (!confirm(`คุณต้องการลบสินค้า "${product.name}" หรือไม่?`)) {
+                    return;
+                }
+            }
+            
+            // Remove product
+            products = products.filter(p => p.id !== productId);
+            
+            saveData();
+            renderStockTable();
+            renderSalesTable();
+            
+            alert(`✅ ลบสินค้า "${product.name}" เรียบร้อยแล้ว`);
         }
 
         // Handle sale form submission
